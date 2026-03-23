@@ -21,7 +21,6 @@ env/
 
 # Data files
 data/raw/
-data/processed/*.csv
 data/processed/features/
 
 # Model checkpoints & saved weights
