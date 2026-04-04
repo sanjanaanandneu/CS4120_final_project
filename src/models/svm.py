@@ -98,6 +98,30 @@ class LinearSVC:
         y_predicted = np.where(y_predicted_svm == -1, 0, 1)
         
         return y_predicted
+    
+    def save(self, filepath):
+        """
+        Save the model to a file.
+        
+        Args:
+            filepath (str): Path to save the model (e.g., 'saved_models/svm_hc3_word_ngram.pkl').
+        """
+        import joblib
+        joblib.dump(self, filepath)
+    
+    @classmethod
+    def load(cls, filepath):
+        """
+        Load a model from a file.
+        
+        Args:
+            filepath (str): Path to the saved model file.
+        
+        Returns:
+            LinearSVC: Loaded model instance.
+        """
+        import joblib
+        return joblib.load(filepath)
 
 def train_linear_svc(X_train, y_train, learning_rate=0.01, max_iter=10000, C=1.0):
     """

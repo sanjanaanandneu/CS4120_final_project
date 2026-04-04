@@ -91,6 +91,30 @@ class LogisticRegression:
         y_predicted = (y_predicted_prob >= 0.5).astype(int)
         
         return y_predicted
+    
+    def save(self, filepath):
+        """
+        Save the model to a file.
+        
+        Args:
+            filepath (str): Path to save the model (e.g., 'saved_models/lr_hc3_tfidf.pkl').
+        """
+        import joblib
+        joblib.dump(self, filepath)
+    
+    @classmethod
+    def load(cls, filepath):
+        """
+        Load a model from a file.
+        
+        Args:
+            filepath (str): Path to the saved model file.
+        
+        Returns:
+            LogisticRegression: Loaded model instance.
+        """
+        import joblib
+        return joblib.load(filepath)
 
 def train_logistic_regression(X_train, y_train, learning_rate=0.01, max_iter=1000):
     """
