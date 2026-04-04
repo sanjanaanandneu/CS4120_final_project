@@ -89,7 +89,7 @@ def run_embeddings(
 def main() -> None:
     FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
-    datasets = ["hc3"]
+    datasets = ["combined"]
 
     for dataset in datasets:
         print("\n" + "=" * 60)
@@ -102,7 +102,7 @@ def main() -> None:
 
         run_tfidf(dataset, train_texts, test_texts)
         run_ngrams(dataset, train_texts, test_texts)
-        run_embeddings(dataset, train_texts, test_texts)
+        #run_embeddings(dataset, train_texts, test_texts)
 
     print("\n" + "=" * 60)
     print("Feature extraction complete. Saved files:")
