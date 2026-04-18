@@ -1,0 +1,126 @@
+X: (n_samples, 100, 100)
+        ↑        ↑    ↑
+   e.g. 8000  max_len  glove dim
+
+Inside LSTM:
+   One sample: (100, 100) — 100 words, each a 100-dim vector
+
+Timestep 1:  "According" → vec_1 (100,) ──► LSTMCell ──► h_1, c_1
+Timestep 2:  "to"        → vec_2 (100,) ──► LSTMCell ──► h_2, c_2  (using h_1, c_1)
+Timestep 3:  "the"       → vec_3 (100,) ──► LSTMCell ──► h_3, c_3  (using h_2, c_2)
+...
+Timestep 100: <pad>      → vec_100       ──► LSTMCell ──► h_100, c_100
+
+Keep h_final = h_100
+h_final: (batch_size, hidden_size)
+               ↓
+         Linear layer
+         W_out: (hidden_size, 1)
+               ↓
+            logit (scalar per sample)
+               ↓
+           sigmoid
+               ↓
+          probability (0–1)
+               ↓
+     0 = human,  1 = AI
+
+
+
+Old code:
+import numpy as np
+#get data by running run_preprocessing.py and run_feature_extraction.py
+class LSTMCell:
+    def __init__(self, input_size, hidden_size):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.W_f = np.random.randn(input_size + hidden_size, hidden_size) * np.sqrt(1 / (input_size + hidden_size))
+        self.W_i = np.random.randn(input_size + hidden_size, hidden_size) * np.sqrt(1 / (input_size + hidden_size))
+        self.W_o = np.random.randn(input_size + hidden_size, hidden_size) * np.sqrt(1 / (input_size + hidden_size))
+        self.W_c = np.random.randn(input_size + hidden_size, hidden_size) * np.sqrt(1 / (input_size + hidden_size))
+        self.b_f = np.zeros(hidden_size)
+        self.b_i = np.zeros(hidden_size)
+        self.b_o = np.zeros(hidden_size)
+        self.b_c = np.zeros(hidden_size)
+    
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def tanh(self, x):
+        return np.tanh(x)
+
+    #x and hprev are concatenated, another way to write U*hprev + W*x
+    def forward(self, x, h_prev, c_prev):
+        xh = np.concatenate((x, h_prev), axis=1)
+        f = self.sigmoid(np.dot(xh, self.W_f) + self.b_f) #forget_gate (ft)
+        i = self.sigmoid(np.dot(xh, self.W_i) + self.b_i) #add gate - input (it)
+        c_tilde = self.tanh(np.dot(xh, self.W_c) + self.b_c) #add gate - candidate (gt)
+        o = self.sigmoid(np.dot(xh, self.W_o) + self.b_o) #output gate (ot)
+        c = f * c_prev + i * c_tilde #cell state (kt + jt)
+        h = o * self.tanh(c) #hidden state (ht)
+        return h, c #return new hidden state and cell state
+
+class LSTM:
+    def __init__(self, input_size, hidden_size, num_layers):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.cells = [LSTMCell(input_size, hidden_size) for _ in range(num_layers)]
+
+    def init_hidden(self, batch_size):
+        """
+        Idea behind (num_layers, batch_size, hidden_size) for h0 and c0:
+        Each layer has its own hidden and cell states and own weights. 
+        Batch_size gives parallel hidden/cell states being sent through layers.
+
+        So each layer will have (batch_size, hidden_size) initial states.
+        """
+
+        h0 = np.zeros((self.num_layers, batch_size, self.hidden_size))
+        c0 = np.zeros((self.num_layers, batch_size, self.hidden_size))
+        return h0, c0
+    
+    #X is a batch of X_train, like 32, 100, 100 from the entire 8000, 100,100
+    def forward(self, X): 
+        """
+        X shape: (n_samples, max_len, input_size)
+        """
+        X = X.transpose(1, 0, 2)
+        seq_len, batch_size, _ = X.shape
+
+        # init h and c for all layers — shape (num_layers, batch_size, hidden_size)
+        h, c = self.init_hidden(batch_size)
+
+        for t in range(seq_len):
+            # (batch_size, input_size) — all batch_size (like 32) samples at timestep t
+            x_t = X[t]   
+            #for each sample, run simultaneous LSTMCells                       
+            for layer_idx, cell in enumerate(self.cells):
+                h[layer_idx], c[layer_idx] = cell.forward(x_t, h[layer_idx], c[layer_idx])
+                # next layer's input = this layer's output
+                x_t = h[layer_idx]              
+        # h_final: (batch_size, hidden_size). 
+        return h[-1]             
+
+    def fit(self, X, y, learning_rate, batch_size, num_epochs):
+        """
+        Train the LSTM model.
+        
+        Args:
+            X (array-like or sparse matrix): Training features.
+            y (array-like): Training labels (0 or 1).
+        """
+        num_samples = X.shape[0]
+        for epoch in range(num_epochs):
+            epoch_loss = 0 
+            idx = np.random.permutation(num_samples)
+            X, y = X[idx], y[idx]
+
+            for start in range(0, num_samples, batch_size):
+                X_batch = X[start:start + batch_size]
+                y_batch = y[start:start + batch_size]
+                h_final = self.forward(X_batch)
+                probs = self.predict(h_final)
+
+                loss = self.
+                epoch_loss += loss

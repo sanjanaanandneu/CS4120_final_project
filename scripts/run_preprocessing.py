@@ -26,25 +26,25 @@ def main() -> None:
     print(f"  HC3 — train: {len(hc3_train):>7,}  test: {len(hc3_test):>6,}")
     print("=" * 60)
 
-    print("=" * 60)
-    print("Summary stats — TuringBench")
-    print("=" * 60)
-    turingbench_train, turingbench_test = load_dataset_splits("turingbench")
+    # print("=" * 60)
+    # print("Summary stats — TuringBench")
+    # print("=" * 60)
+    # turingbench_train, turingbench_test = load_dataset_splits("turingbench")
 
-    print("\n" + "=" * 60)
-    print("Preprocessing complete.")
-    print(f"  TuringBench — train: {len(turingbench_train):>7,}  test: {len(turingbench_test):>6,}")
-    print("=" * 60)
+    # print("\n" + "=" * 60)
+    # print("Preprocessing complete.")
+    # print(f"  TuringBench — train: {len(turingbench_train):>7,}  test: {len(turingbench_test):>6,}")
+    # print("=" * 60)
 
-    print("=" * 60)
-    print("Summary stats — Combined")
-    print("=" * 60)
-    combined_train, combined_test = load_dataset_splits("combined")
+    # print("=" * 60)
+    # print("Summary stats — Combined")
+    # print("=" * 60)
+    # combined_train, combined_test = load_dataset_splits("combined")
 
-    print("\n" + "=" * 60)
-    print("Preprocessing complete.")
-    print(f"  Combined — train: {len(combined_train):>7,}  test: {len(combined_test):>6,}")
-    print("=" * 60)
+    # print("\n" + "=" * 60)
+    # print("Preprocessing complete.")
+    # print(f"  Combined — train: {len(combined_train):>7,}  test: {len(combined_test):>6,}")
+    # print("=" * 60)
 
 
 if __name__ == "__main__":
