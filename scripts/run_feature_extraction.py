@@ -21,6 +21,7 @@ from src.data.preprocess import load_dataset_splits
 from src.features.tfidf import TFIDFExtractor
 from src.features.ngrams import NgramExtractor
 from src.features.embeddings import EmbeddingExtractor
+from src.features.word2vec import Word2VecExtractor
 
 FEATURES_DIR = Path("data/processed/features")
 
@@ -85,11 +86,33 @@ def run_embeddings(
     extractor.save_embeddings(train_emb, FEATURES_DIR / dataset / "bert_embeddings_train.npy")
     extractor.save_embeddings(test_emb, FEATURES_DIR / dataset / "bert_embeddings_test.npy")
 
+def run_word2vec(
+    dataset: str,
+    train_texts: list[str],
+    test_texts: list[str],
+) -> None:
+    print(f"\n--- Word2Vec: {dataset} ---")
+    extractor = Word2VecExtractor(model_name="glove-wiki-gigaword-100")
+    extractor.fit(train_texts)  # loads the model
+
+    print("  Extracting train embeddings …")
+    extractor.transform_and_save(
+        train_texts,
+        FEATURES_DIR / dataset / "word2vec_embeddings_train.npy",
+        max_len=100
+    )
+
+    print("  Extracting test embeddings …")
+    extractor.transform_and_save(
+        test_texts,
+        FEATURES_DIR / dataset / "word2vec_embeddings_test.npy",
+        max_len=100
+    )
 
 def main() -> None:
     FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
-    datasets = ["combined"]
+    datasets = ["hc3"] #originally "combined"
 
     for dataset in datasets:
         print("\n" + "=" * 60)
@@ -100,9 +123,15 @@ def main() -> None:
         train_texts = train_df["text"].tolist()
         test_texts = test_df["text"].tolist()
 
+        # Save labels
+        (FEATURES_DIR / dataset).mkdir(parents=True, exist_ok=True)
+        np.save(FEATURES_DIR / dataset / "y_train.npy", train_df["label"].values)
+        np.save(FEATURES_DIR / dataset / "y_test.npy",  test_df["label"].values)
+
         run_tfidf(dataset, train_texts, test_texts)
         run_ngrams(dataset, train_texts, test_texts)
         #run_embeddings(dataset, train_texts, test_texts)
+        run_word2vec(dataset, train_texts, test_texts)
 
     print("\n" + "=" * 60)
     print("Feature extraction complete. Saved files:")
