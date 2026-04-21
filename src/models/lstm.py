@@ -41,40 +41,19 @@ class LSTMCell:
 
 class LSTM:
     def __init__(self, input_size, hidden_size, num_layers):
-        self.input_size  = input_size
         self.hidden_size = hidden_size
         self.num_layers  = num_layers
-
-        self.cells = []
-        for layer in range(num_layers):
-            in_size = input_size if layer == 0 else hidden_size
-            self.cells.append(LSTMCell(in_size, hidden_size))
+        self.lstm        = nn.LSTM(input_size, hidden_size, 
+                                   num_layers=num_layers, 
+                                   batch_first=True)
 
     def parameters(self):
-        params = []
-        for cell in self.cells:
-            params += cell.parameters()
-        return params
-
-    def init_hidden(self, batch_size):
-        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
-        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
-        return h0, c0
+        return list(self.lstm.parameters())
 
     def forward(self, X):
-        X = X.permute(1, 0, 2)                      
-        seq_len, batch_size, _ = X.shape
-
-        h, c = self.init_hidden(batch_size)
-
-        for t in range(seq_len):
-            x_t = X[t]
-            for layer_idx, cell in enumerate(self.cells):
-                h[layer_idx], c[layer_idx] = cell.forward(x_t, h[layer_idx], c[layer_idx])
-                x_t = h[layer_idx]
-
-        return h[-1]                                
-
+        # X: (batch_size, max_len, input_size) — batch_first=True handles transpose
+        _, (h_n, _) = self.lstm(X)
+        return h_n[-1]           # (batch_size, hidden_size)
 
 class LSTMClassifier:
     def __init__(self, input_size, hidden_size, num_layers):
@@ -130,6 +109,24 @@ if __name__ == "__main__":
     model = LSTMClassifier(input_size=100, hidden_size=128, num_layers=2)
     model.fit(X_train, y_train)
 
+    # Test predictions
     preds    = model.predict(X_test)
-    accuracy = np.mean(preds == y_test)
-    print(f"Test Accuracy: {accuracy:.4f}")
+    test_acc = np.mean(preds == y_test)
+    print(f"Test Accuracy: {test_acc:.4f}")
+
+    # 1. Class balance
+    print(f"\nClass balance (test):")
+    print(f"  Human (0): {np.bincount(y_test)[0]}")
+    print(f"  AI    (1): {np.bincount(y_test)[1]}")
+
+    # 2. Train vs test accuracy
+    train_preds = model.predict(X_train)
+    train_acc   = np.mean(train_preds == y_train)
+    print(f"\nTrain Accuracy: {train_acc:.4f}")
+    print(f"Test Accuracy:  {test_acc:.4f}")
+    print(f"Gap:            {train_acc - test_acc:.4f}")
+
+    # 3. Full classification report
+    from sklearn.metrics import classification_report
+    print("\nClassification Report:")
+    print(classification_report(y_test, preds, target_names=["human", "AI"]))
