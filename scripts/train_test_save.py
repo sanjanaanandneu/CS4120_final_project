@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.data.preprocess import load_dataset_splits
 from src.models.logistic_regression import train_logistic_regression
 from src.models.svm import train_linear_svc
-from src.utils.evaluation import evaluate_model
+from src.evaluation.metrics import evaluate_model
 
 def main():
     parser = argparse.ArgumentParser(description="Train and save a single model on a single dataset.")
