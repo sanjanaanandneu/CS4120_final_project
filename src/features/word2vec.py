@@ -43,7 +43,12 @@ class Word2VecExtractor:
     def transform_and_save(self, texts, path, max_len=100, chunk_size=1000):
         if self.model is None:
             raise RuntimeError("Call fit() before transform_and_save().")
-        
+        # Print first 3 raw texts before any processing
+        print("\n--- Sample raw texts before featurization ---")
+        for i, text in enumerate(texts[:3]):
+            print(f"Sample {i}: '{text[:200]}'")  # first 200 chars
+        print("---\n")
+
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         chunks = []
