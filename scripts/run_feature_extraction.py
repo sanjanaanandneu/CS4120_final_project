@@ -112,7 +112,7 @@ def run_word2vec(
 def main() -> None:
     FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
-    datasets = ["hc3"] #originally "combined"
+    datasets = ["combined"] #originally "combined"
 
     for dataset in datasets:
         print("\n" + "=" * 60)
