@@ -2,7 +2,10 @@ import numpy as np
 from scipy import sparse
 from tqdm import tqdm
 
-class LinearSVC:
+from src.models.base import BaseModel
+
+
+class LinearSVC(BaseModel):
     """
     Custom implementation of Linear Support Vector Classifier (SVM) for binary classification.
     """
@@ -123,23 +126,3 @@ class LinearSVC:
         import joblib
         return joblib.load(filepath)
 
-def train_linear_svc(X_train, y_train, learning_rate=0.01, max_iter=10000, C=1.0):
-    """
-    Train a linear SVM model.
-    
-    This function creates an instance of LinearSVC, fits it to the training data,
-    and returns the trained model.
-    
-    Args:
-        X_train (array-like or sparse matrix): Training features.
-        y_train (array-like): Training labels.
-        learning_rate (float): Learning rate for gradient descent.
-        max_iter (int): Maximum iterations for gradient descent.
-        C (float): Regularization parameter.
-    
-    Returns:
-        LinearSVC: Trained model instance.
-    """
-    model = LinearSVC(learning_rate=learning_rate, max_iter=max_iter, C=C)
-    model.fit(X_train, y_train)
-    return model

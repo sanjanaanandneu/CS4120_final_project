@@ -2,7 +2,10 @@ import numpy as np
 from scipy import sparse
 from tqdm import tqdm
 
-class LogisticRegression:
+from src.models.base import BaseModel
+
+
+class LogisticRegression(BaseModel):
     """
     Custom implementation of Logistic Regression for binary classification.
     """
@@ -116,22 +119,3 @@ class LogisticRegression:
         import joblib
         return joblib.load(filepath)
 
-def train_logistic_regression(X_train, y_train, learning_rate=0.01, max_iter=1000):
-    """
-    Train a logistic regression model.
-    
-    This function creates an instance of LogisticRegression, fits it to the training data,
-    and returns the trained model.
-    
-    Args:
-        X_train (array-like or sparse matrix): Training features.
-        y_train (array-like): Training labels.
-        learning_rate (float): Learning rate for gradient descent.
-        max_iter (int): Maximum iterations for gradient descent.
-    
-    Returns:
-        LogisticRegression: Trained model instance.
-    """
-    model = LogisticRegression(learning_rate=learning_rate, max_iter=max_iter)
-    model.fit(X_train, y_train)
-    return model

@@ -1,7 +1,11 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from pathlib import Path
 from torch.utils.data import DataLoader, TensorDataset
+
+from src.models.base import BaseModel
+
 
 class LSTMCell:
     def __init__(self, input_size, hidden_size):
@@ -55,7 +59,7 @@ class LSTM:
         _, (h_n, _) = self.lstm(X)
         return h_n[-1]           # (batch_size, hidden_size)
 
-class LSTMClassifier:
+class LSTMClassifier(BaseModel):
     def __init__(self, input_size, hidden_size, num_layers):
         self.lstm       = LSTM(input_size, hidden_size, num_layers)
         self.classifier = nn.Linear(hidden_size, 1)  
@@ -97,36 +101,10 @@ class LSTMClassifier:
                 all_preds.append((probs >= 0.5).int().numpy())
         return np.concatenate(all_preds)
 
+    def save(self, filepath: str) -> None:
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(self, filepath)
 
-# --- Entry point ---
-if __name__ == "__main__":
-    DATASET = "hc3"
-    X_train = np.load(f"data/processed/features/{DATASET}/word2vec_embeddings_train.npy")
-    X_test  = np.load(f"data/processed/features/{DATASET}/word2vec_embeddings_test.npy")
-    y_train = np.load(f"data/processed/features/{DATASET}/y_train.npy")
-    y_test  = np.load(f"data/processed/features/{DATASET}/y_test.npy")
-
-    model = LSTMClassifier(input_size=100, hidden_size=128, num_layers=2)
-    model.fit(X_train, y_train)
-
-    # Test predictions
-    preds    = model.predict(X_test)
-    test_acc = np.mean(preds == y_test)
-    print(f"Test Accuracy: {test_acc:.4f}")
-
-    # 1. Class balance
-    print(f"\nClass balance (test):")
-    print(f"  Human (0): {np.bincount(y_test)[0]}")
-    print(f"  AI    (1): {np.bincount(y_test)[1]}")
-
-    # 2. Train vs test accuracy
-    train_preds = model.predict(X_train)
-    train_acc   = np.mean(train_preds == y_train)
-    print(f"\nTrain Accuracy: {train_acc:.4f}")
-    print(f"Test Accuracy:  {test_acc:.4f}")
-    print(f"Gap:            {train_acc - test_acc:.4f}")
-
-    # 3. Full classification report
-    from sklearn.metrics import classification_report
-    print("\nClassification Report:")
-    print(classification_report(y_test, preds, target_names=["human", "AI"]))
+    @classmethod
+    def load(cls, filepath: str) -> "LSTMClassifier":
+        return torch.load(filepath, weights_only=False)
