@@ -1,130 +1,101 @@
-import pandas as pd
-import tensorflow as tf
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences 
-from src.utils.evaluation import _compute_confusion_matrix, compute_accuracy, compute_precision, compute_recall, compute_f1
-from matplotlib import pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
+"""PyTorch CNN text classifier for AI-text detection.
 
-class CNN(tf.keras.Model):
-    def __init__(self, vocab_size=5000, max_length=100, embedding_dim=64, num_filters=128, kernel_size=5,dropout_rate=0.2):
-        super().__init__()
+Accepts pre-extracted Word2Vec embeddings as input — shape (n, seq_len, embedding_dim).
 
-        self.vocab_size = vocab_size
-        self.max_length = max_length
+Architecture:
+    nn.Conv1d -> ReLU -> global max pool
+    -> Dropout -> Linear(num_filters, 32) -> ReLU -> Linear(32, 1) -> sigmoid
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, TensorDataset
+
+from src.models.base import BaseModel
+
+
+class CNN(nn.Module, BaseModel):
+    def __init__(
+        self,
+        embedding_dim: int = 100,
+        num_filters: int = 128,
+        kernel_size: int = 5,
+        dropout_rate: float = 0.2,
+    ):
+        nn.Module.__init__(self)
         self.embedding_dim = embedding_dim
         self.num_filters = num_filters
         self.kernel_size = kernel_size
         self.dropout_rate = dropout_rate
 
-        # layers
-        self.embedding = tf.keras.layers.Embedding(input_dim=self.vocab_size, output_dim=self.embedding_dim, input_length=self.max_length)
-        self.conv = tf.keras.layers.Conv1D(filters=self.num_filters, kernel_size=self.kernel_size, activation='relu')
-        self.pooling = tf.keras.layers.GlobalMaxPooling1D()
-        self.dropout = tf.keras.layers.Dropout(self.dropout_rate)
-        self.dense1 = tf.keras.layers.Dense(32, activation='relu')
-        self.dense2 = tf.keras.layers.Dense(1, activation='sigmoid')
+        self.conv = nn.Conv1d(embedding_dim, num_filters, kernel_size)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc1 = nn.Linear(num_filters, 32)
+        self.fc2 = nn.Linear(32, 1)
 
-    def call(self, X):
-        X = self.embedding(X)
-        X = self.conv(X)
-        X = self.pooling(X)
-        X = self.dropout(X)
-        X = self.dense1(X)
-        X = self.dense2(X)
-        return X
-    
-# load the training and testing data
-train_data = pd.read_csv('data\processed\hc3_train.csv')
-test_data = pd.read_csv('data\processed\hc3_test.csv')
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        # X: (batch, seq_len, embedding_dim)
+        x = X.permute(0, 2, 1)          # (batch, embedding_dim, seq_len)
+        x = F.relu(self.conv(x))         # (batch, num_filters, seq_len - kernel_size + 1)
+        x = torch.max(x, dim=2).values   # (batch, num_filters) — global max pool
+        x = self.dropout(x)
+        x = F.relu(self.fc1(x))          # (batch, 32)
+        x = self.fc2(x)                  # (batch, 1)
+        return torch.sigmoid(x).squeeze(1)  # (batch,)
 
-# extract the 'text' column from the train data for features (inputs) and 'label' column from the train date for labels (outputs)
-X_train = train_data['text'].values
-y_train = train_data['label'].values
+    def fit(self, X: np.ndarray, y, epochs: int = 10, batch_size: int = 32, lr: float = 0.001) -> None:
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        y_tensor = torch.tensor(np.asarray(y), dtype=torch.float32)
+        loader = DataLoader(TensorDataset(X_tensor, y_tensor), batch_size=batch_size, shuffle=True)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        loss_fn = nn.BCELoss()
 
-# extract the 'text' column from the test data for features (inputs) and 'label' column from the test date for labels (outputs)
-X_test = test_data['text'].values
-y_test = test_data['label'].values
+        self.train()
+        for epoch in range(epochs):
+            epoch_loss = 0.0
+            for X_batch, y_batch in loader:
+                optimizer.zero_grad()
+                loss = loss_fn(self.forward(X_batch), y_batch)
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss.item()
+            print(f"Epoch {epoch + 1}/{epochs} — Loss: {epoch_loss / len(loader):.4f}")
 
-vocab_size = 5000
-tokenizer = Tokenizer(num_words=vocab_size, oov_token='<OOV>')
-tokenizer.fit_on_texts(X_train)
+    def predict(self, X: np.ndarray, batch_size: int = 32) -> np.ndarray:
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        loader = DataLoader(TensorDataset(X_tensor), batch_size=batch_size)
+        all_preds: list[np.ndarray] = []
+        self.eval()
+        with torch.no_grad():
+            for (X_batch,) in loader:
+                probs = self.forward(X_batch)
+                all_preds.append((probs >= 0.5).int().numpy())
+        return np.concatenate(all_preds)
 
-X_train_sequences = tokenizer.texts_to_sequences(X_train)
-X_test_sequences = tokenizer.texts_to_sequences(X_test)
+    def save(self, filepath: str) -> None:
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "state_dict": self.state_dict(),
+                "config": {
+                    "embedding_dim": self.embedding_dim,
+                    "num_filters": self.num_filters,
+                    "kernel_size": self.kernel_size,
+                    "dropout_rate": self.dropout_rate,
+                },
+            },
+            filepath,
+        )
 
-max_length = 100
-X_train_pad_sequences = pad_sequences(X_train_sequences, maxlen=max_length, padding='post')
-X_test_pad_sequences = pad_sequences(X_test_sequences, maxlen=max_length, padding='post')
-
-model = CNN(vocab_size=vocab_size, max_length=max_length)
-
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-epochs = 10
-batch_size = 32
-fit = model.fit(X_train_pad_sequences, y_train, epochs=epochs, batch_size=batch_size, validation_split=0.2)
-
-loss, accuracy = model.evaluate(X_test_pad_sequences, y_test)
-print(f'Test Loss: {loss:.4f}, Test Accuracy: {accuracy:.4f}')
-
-predictions = model.predict(X_test_pad_sequences)
-y_pred = (predictions > 0.5).astype(int).flatten()
-
-conf_matrix = _compute_confusion_matrix(y_test, y_pred)
-print("Confusion Matrix:", conf_matrix)
-
-accuracy = compute_accuracy(y_test, y_pred)
-print(f'Accuracy: {accuracy:.4f}')
-
-precision = compute_precision(y_test, y_pred)
-print(f'Precision: {precision:.4f}')
-
-recall = compute_recall(y_test, y_pred)
-print(f'Recall: {recall:.4f}')
-
-f1_score = compute_f1(y_test, y_pred)
-print(f'F1 Score: {f1_score:.4f}')
-
-plt.figure(figsize=(6,5))
-sns.boxplot(x=y_test, y=predictions.flatten())
-plt.xlabel('True Label')
-plt.ylabel('Predicted Probability')
-plt.title('Predicted Probabilities')
-plt.show()
-
-plt.figure(figsize=(6,5))
-plt.plot(fit.history['accuracy'], marker='o', label='Training Accuracy')
-plt.plot(fit.history['val_accuracy'], marker='o', label='Validation Accuracy')
-plt.xlabel('Epoch')
-plt.ylabel('Accuracy')
-plt.title('Training and Validation Accuracy')
-plt.legend()
-plt.show()
-
-plt.figure(figsize=(6,5))
-plt.plot(fit.history['loss'], marker='o', label='Training Loss')
-plt.plot(fit.history['val_loss'], marker='o', label='Validation Loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('Training and Validation Loss')
-plt.legend()
-plt.show()
-
-plt.figure(figsize=(6,5))
-conf_matrix = confusion_matrix(y_test, y_pred)
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
-plt.xlabel('Predicted Label')
-plt.ylabel('True Label')
-plt.title('Confusion Matrix')
-plt.show()
-
-plt.figure(figsize=(6,5))
-plt.hist(predictions[y_test==0], bins=20, alpha=0.7, label='Human')
-plt.hist(predictions[y_test==1], bins=20, alpha=0.7, label='AI')
-plt.xlabel('Predicted Probability')
-plt.ylabel('Frequency')
-plt.title('Distribution of Predicted Probabilities')
-plt.legend()
-plt.show()
+    @classmethod
+    def load(cls, filepath: str) -> "CNN":
+        checkpoint = torch.load(filepath, weights_only=False)
+        model = cls(**checkpoint["config"])
+        model.load_state_dict(checkpoint["state_dict"])
+        return model
