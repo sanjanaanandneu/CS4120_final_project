@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.data.preprocess import load_dataset_splits
 from src.models.pretrained_classifier import PretrainedClassifier
 from src.data.hc3_dataset import HC3Dataset
-from src.models.logistic_regression import train_logistic_regression
-from src.models.svm import train_linear_svc
+from src.models.logistic_regression import LogisticRegression
+from src.models.svm import LinearSVC
 from src.evaluation.metrics import (
     compute_metrics,
     compute_domain_metrics,
@@ -70,10 +70,12 @@ def _run_baseline(
 ) -> dict[str, float]:
     if model_type == "svm":
         print(f"\n  Training SVM on {feature_name} features …")
-        model = train_linear_svc(X_train, y_train)
+        model = LinearSVC()
+        model.fit(X_train, y_train)
     else:
         print(f"\n  Training Logistic Regression on {feature_name} features …")
-        model = train_logistic_regression(X_train, y_train)
+        model = LogisticRegression()
+        model.fit(X_train, y_train)
     preds = model.predict(X_test)
     return compute_metrics(y_test, preds)
 
@@ -87,7 +89,7 @@ def _run_finetuned(
     checkpoint_dir: str | Path,
     test_df,
 ) -> tuple[np.ndarray, np.ndarray]:
-    classifier = PretrainedClassifier.load_from_checkpoint(checkpoint_dir)
+    classifier = PretrainedClassifier.load(checkpoint_dir)
     classifier.eval()
 
     test_ds = HC3Dataset(test_df, classifier.tokenizer, max_length=512)
@@ -159,9 +161,9 @@ def main() -> None:
     # Fine-tuned model
     checkpoint = args.checkpoint
     if checkpoint is None:
-        # Auto-detect the most recently modified checkpoint
+        # Auto-detect the most recently modified checkpoint saved by run_finetune.py
         model_dirs = sorted(
-            Path("src/models").glob("**/config.json"),
+            Path("models").glob("**/config.json"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
