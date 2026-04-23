@@ -2,74 +2,59 @@ import numpy as np
 from scipy import sparse
 from tqdm import tqdm
 
-class LinearSVC:
+from src.models.base import BaseModel
+
+
+class LinearSVC(BaseModel):
     """
     Custom implementation of Linear Support Vector Classifier (SVM) for binary classification.
     """
     
-    def __init__(self, learning_rate=0.01, max_iter=10000, C=1.0):
-        """
-        Initialize the Linear SVM model.
-        
-        Args:
-            learning_rate (float): The step size for gradient descent updates.
-            max_iter (int): Maximum number of iterations for gradient descent.
-            C (float): Regularization parameter (inverse of regularization strength).
-        """
+    def __init__(self, learning_rate=0.01, epochs=1000, C=1.0):
         self.learning_rate = learning_rate
-        self.max_iter = max_iter
+        self.epochs = epochs
         self.C = C
-        self.weights = None  # Will be initialized in fit
-        self.bias = None     # Will be initialized in fit
+        self.weights = None
+        self.bias = None
     
     def fit(self, X, y):
-        """
-        Train the linear SVM model using gradient descent on hinge loss.
-        
-        Args:
-            X (array-like or sparse matrix): Training features.
-            y (array-like): Training labels (0 or 1, will be converted to -1 or 1 internally).
-        """
         sparse_X = sparse.issparse(X)
-
         if not sparse_X:
             X = np.array(X)
-        
         y = np.array(y)
-        
-        # Convert labels to -1 and 1 for SVM
         y_svm = np.where(y == 0, -1, 1)
-        
         n_samples, n_features = X.shape
-        
-        # Initialize weights and bias
+
         self.weights = np.zeros(n_features)
         self.bias = 0.0
-        
-        for _ in tqdm(range(self.max_iter)):
+        self.train_losses = []
+        self.train_accuracies = []
+
+        step = max(1, self.epochs // 200)
+
+        for epoch in tqdm(range(self.epochs)):
             if sparse_X:
                 decision = np.array(X.dot(self.weights)).ravel() + self.bias
             else:
                 decision = np.dot(X, self.weights) + self.bias
-            
-            # Compute hinge loss gradients
-            # For hinge loss: max(0, 1 - y * decision)
-            # Gradient w.r.t. weights: -C * sum(y_i * X_i) for misclassified points + 2 * weights (L2 reg)
-            # Gradient w.r.t. bias: -C * sum(y_i) for misclassified points
-            
-            # Indicator for misclassified points (where y * decision < 1)
+
             misclassified = (y_svm * decision < 1).astype(float)
-            
-            # Gradients
+
             if sparse_X:
-                dw = -self.C * np.array(X.T.dot(y_svm * misclassified)).ravel() + 2 * self.weights
+                dw = -(self.C / n_samples) * np.array(X.T.dot(y_svm * misclassified)).ravel() + self.weights
             else:
-                dw = -self.C * np.dot(X.T, y_svm * misclassified) + 2 * self.weights
-            db = -self.C * np.sum(y_svm * misclassified)
-            
-            # Update
+                dw = -(self.C / n_samples) * np.dot(X.T, y_svm * misclassified) + self.weights
+            db = -(self.C / n_samples) * np.sum(y_svm * misclassified)
+
             self.weights -= self.learning_rate * dw
             self.bias -= self.learning_rate * db
+
+            if epoch % step == 0:
+                loss = np.mean(np.maximum(0, 1 - y_svm * decision))
+                y_pred = np.where(np.sign(decision) == -1, 0, 1)
+                acc = np.mean(y_pred == y)
+                self.train_losses.append(loss)
+                self.train_accuracies.append(acc)
     
     def predict(self, X):
         """
@@ -123,23 +108,3 @@ class LinearSVC:
         import joblib
         return joblib.load(filepath)
 
-def train_linear_svc(X_train, y_train, learning_rate=0.01, max_iter=10000, C=1.0):
-    """
-    Train a linear SVM model.
-    
-    This function creates an instance of LinearSVC, fits it to the training data,
-    and returns the trained model.
-    
-    Args:
-        X_train (array-like or sparse matrix): Training features.
-        y_train (array-like): Training labels.
-        learning_rate (float): Learning rate for gradient descent.
-        max_iter (int): Maximum iterations for gradient descent.
-        C (float): Regularization parameter.
-    
-    Returns:
-        LinearSVC: Trained model instance.
-    """
-    model = LinearSVC(learning_rate=learning_rate, max_iter=max_iter, C=C)
-    model.fit(X_train, y_train)
-    return model

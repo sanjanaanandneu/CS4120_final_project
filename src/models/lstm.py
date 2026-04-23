@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from pathlib import Path
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
@@ -8,6 +9,9 @@ from sklearn.model_selection import train_test_split
 """
 In order to run this, run python src/models/lstm.py from project root.
 """
+
+from src.models.base import BaseModel
+
 
 class LSTMCell:
     def __init__(self, input_size, hidden_size):
@@ -76,7 +80,7 @@ class LSTM:
 
         return h[-1]                                  # (batch_size, hidden_size)
 
-class LSTMClassifier:
+class LSTMClassifier(BaseModel):
     def __init__(self, input_size, hidden_size, num_layers):
         self.lstm       = LSTM(input_size, hidden_size, num_layers)
         self.classifier = nn.Linear(hidden_size, 1)  
@@ -147,67 +151,10 @@ class LSTMClassifier:
                 all_preds.append((probs >= 0.5).int().numpy())
         return np.concatenate(all_preds)
 
-if __name__ == "__main__":
-    DATASET = "hc3"
-    X_train = np.load(f"data/processed/features/{DATASET}/word2vec_embeddings_train.npy")
-    X_test  = np.load(f"data/processed/features/{DATASET}/word2vec_embeddings_test.npy")
-    y_train = np.load(f"data/processed/features/{DATASET}/y_train.npy")
-    y_test  = np.load(f"data/processed/features/{DATASET}/y_test.npy")
+    def save(self, filepath: str) -> None:
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(self, filepath)
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.15, random_state=42
-)
-
-    model = LSTMClassifier(input_size=100, hidden_size=128, num_layers=2)
-    model.fit(X_train, y_train, X_val=X_val, y_val=y_val)
-
-    # Test predictions
-    preds    = model.predict(X_test)
-    test_acc = np.mean(preds == y_test)
-    print(f"Test Accuracy: {test_acc:.4f}")
-
-    # 1. Class balance
-    print(f"\nClass balance (test):")
-    print(f"  Human (0): {np.bincount(y_test)[0]}")
-    print(f"  AI    (1): {np.bincount(y_test)[1]}")
-
-    # 2. Train vs test accuracy
-    train_preds = model.predict(X_train)
-    train_acc   = np.mean(train_preds == y_train)
-    print(f"\nTrain Accuracy: {train_acc:.4f}")
-    print(f"Test Accuracy:  {test_acc:.4f}")
-    print(f"Gap:            {train_acc - test_acc:.4f}")
-
-    # 3. Full classification report
-    from sklearn.metrics import classification_report
-    print("\nClassification Report:")
-    print(classification_report(y_test, preds, target_names=["human", "AI"]))
-
-    epochs = range(1, len(model.train_losses) + 1)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    fig.suptitle("LSTM Training Curves", fontsize=14, fontweight="bold")
-
-    # Loss plot
-    ax1.plot(epochs, model.train_losses, color="#e74c3c", linewidth=2, marker="o", markersize=4)
-    ax1.plot(epochs, model.val_losses, color="#e67e22", linewidth=2, marker="o", markersize=4, label="Val")
-
-    ax1.set_title("Training Loss")
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("BCE Loss")
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xticks(epochs)
-
-    # Accuracy plot
-    ax2.plot(epochs, model.train_accuracies, color="#2ecc71", linewidth=2, marker="o", markersize=4)
-    ax2.plot(epochs, model.val_accuracies, color="#1abc9c", linewidth=2, marker="o", markersize=4, label="Val")
-    ax2.set_title("Training Accuracy")
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Accuracy")
-    ax2.set_ylim(0, 1)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xticks(epochs)
-
-    plt.tight_layout()
-    plt.savefig("LSTM_plots.png", dpi=150, bbox_inches="tight")
-    plt.show()
+    @classmethod
+    def load(cls, filepath: str) -> "LSTMClassifier":
+        return torch.load(filepath, weights_only=False)

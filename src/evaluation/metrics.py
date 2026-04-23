@@ -1,4 +1,18 @@
-"""Evaluation utilities for the AI-text detection task."""
+"""Evaluation utilities for the AI-text detection task.
+
+Two layers of metrics are provided:
+
+Custom (confusion-matrix-based)
+    _compute_confusion_matrix, compute_accuracy, compute_precision,
+    compute_recall, compute_f1
+    Built from scratch using NumPy.  Useful for verification and as
+    transparent reference implementations.
+
+sklearn-based
+    compute_metrics, compute_domain_metrics
+    Delegate to scikit-learn for weighted/macro averaging and ROC-AUC.
+    These are the primary metrics used in evaluation reports.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +28,10 @@ from sklearn.metrics import (
 
 HC3_DOMAINS = ["reddit_eli5", "open_qa", "finance", "medicine", "wiki_csai"]
 
+
+# ---------------------------------------------------------------------------
+# sklearn-based metrics
+# ---------------------------------------------------------------------------
 
 def compute_metrics(
     y_true: list[int] | np.ndarray,
@@ -133,9 +151,20 @@ def evaluate_model(
     X_test,
     y_true: list[int] | np.ndarray,
 ) -> dict[str, float]:
-    """Run model.predict and return metrics.
+    """Call model.predict then return the full sklearn-based metrics dict.
 
-    Convenience wrapper for models (LR, SVM) that expose a predict() method.
+    This is the canonical evaluation entry point.  Use the custom
+    compute_precision / compute_recall / compute_f1 helpers when you need
+    individual metric values derived from the confusion matrix directly.
+
+    Parameters
+    ----------
+    model:
+        Any model instance that exposes a predict(X) method.
+    X_test:
+        Feature matrix or raw texts matching the format expected by model.
+    y_true:
+        Ground-truth binary labels.
 
     Returns
     -------

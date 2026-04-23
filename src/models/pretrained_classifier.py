@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+from src.models.base import BaseModel
 
 
 def _resolve_device(device: str | None) -> str:
@@ -20,7 +24,31 @@ def _resolve_device(device: str | None) -> str:
     return "cpu"
 
 
-class PretrainedClassifier(nn.Module):
+class _TextLabelDataset(Dataset):
+    """Minimal Dataset that wraps pre-tokenized tensors and returns dict batches."""
+
+    def __init__(
+        self,
+        input_ids: torch.Tensor,
+        attention_masks: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> None:
+        self.input_ids = input_ids
+        self.attention_masks = attention_masks
+        self.labels = labels
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, idx: int) -> dict:
+        return {
+            "input_ids": self.input_ids[idx],
+            "attention_mask": self.attention_masks[idx],
+            "label": self.labels[idx],
+        }
+
+
+class PretrainedClassifier(nn.Module, BaseModel):
     """Sequence classifier built on top of a pretrained HuggingFace encoder.
 
     Wraps ``AutoModelForSequenceClassification`` (which attaches a linear
@@ -116,6 +144,91 @@ class PretrainedClassifier(nn.Module):
         return probs.cpu().numpy()
 
     # ------------------------------------------------------------------
+    # BaseModel interface
+    # ------------------------------------------------------------------
+
+    def predict(self, X: list[str], batch_size: int = 32) -> np.ndarray:
+        """Tokenise *X* and return binary class predictions (0 or 1).
+
+        Parameters
+        ----------
+        X:
+            List of raw text strings.
+        batch_size:
+            Number of texts to process per forward pass.
+
+        Returns
+        -------
+        np.ndarray of shape ``(len(X),)`` with integer labels.
+        """
+        all_preds: list[np.ndarray] = []
+        for i in range(0, len(X), batch_size):
+            batch = list(X[i : i + batch_size])
+            encoded = self.tokenizer(
+                batch,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt",
+            )
+            input_ids = encoded["input_ids"].to(self.device)
+            attention_mask = encoded["attention_mask"].to(self.device)
+            probs = self.predict_proba(input_ids, attention_mask)
+            all_preds.append(probs.argmax(axis=1))
+        return np.concatenate(all_preds)
+
+    def fit(self, X: list[str], y, **kwargs) -> None:
+        """Fine-tune on raw texts *X* with labels *y*.
+
+        Tokenises *X*, performs an 80/20 train/val split, and delegates to
+        :class:`~src.training.trainer.Trainer`.
+
+        Parameters
+        ----------
+        X:
+            List of raw text strings (training set).
+        y:
+            Binary integer labels aligned with *X*.
+        **kwargs:
+            Passed through to :class:`~src.training.trainer.TrainerConfig`
+            (e.g. ``num_epochs``, ``learning_rate``, ``output_dir``).
+            ``batch_size`` (default 16) and ``max_length`` (default 512) are
+            consumed here and not forwarded.
+        """
+        # Local import to avoid circular dependency (trainer.py imports this module).
+        from src.training.trainer import Trainer, TrainerConfig
+
+        batch_size = kwargs.pop("batch_size", 16)
+        max_length = kwargs.pop("max_length", 512)
+
+        # Tokenise all texts up front
+        encoded = self.tokenizer(
+            list(X),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt",
+        )
+        dataset = _TextLabelDataset(
+            encoded["input_ids"],
+            encoded["attention_mask"],
+            torch.tensor(list(y), dtype=torch.long),
+        )
+
+        # 80 / 20 train / val split
+        n_val = max(1, int(0.2 * len(dataset)))
+        n_train = len(dataset) - n_val
+        train_ds, val_ds = random_split(dataset, [n_train, n_val])
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_ds, batch_size=batch_size)
+
+        # Build TrainerConfig — only pass kwargs that are recognised fields
+        valid_fields = {f.name for f in dataclasses.fields(TrainerConfig)}
+        config = TrainerConfig(**{k: v for k, v in kwargs.items() if k in valid_fields})
+
+        Trainer(self, config).train(train_loader, val_loader)
+
+    # ------------------------------------------------------------------
     # Checkpoint I/O
     # ------------------------------------------------------------------
 
@@ -133,17 +246,17 @@ class PretrainedClassifier(nn.Module):
         print(f"  Checkpoint saved → {checkpoint_dir}")
 
     @classmethod
-    def load_from_checkpoint(
+    def load(
         cls,
-        checkpoint_dir: str | Path,
+        filepath: str | Path,
         device: str | None = None,
     ) -> "PretrainedClassifier":
         """Reload a classifier previously saved with :meth:`save`.
 
         Parameters
         ----------
-        checkpoint_dir:
-            Directory written by :meth:`save`.
+        filepath:
+            Directory written by :meth:`save` (HuggingFace checkpoint directory).
         device:
             Target device override (auto-detected if ``None``).
 
@@ -151,7 +264,7 @@ class PretrainedClassifier(nn.Module):
         -------
         PretrainedClassifier
         """
-        checkpoint_dir = Path(checkpoint_dir)
+        checkpoint_dir = Path(filepath)
         if not checkpoint_dir.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_dir}")
 

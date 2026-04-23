@@ -157,7 +157,7 @@ def main() -> None:
 
     # Reload best checkpoint for final evaluation
     print(f"\nReloading best checkpoint from {output_dir} …")
-    best_classifier = PretrainedClassifier.load_from_checkpoint(output_dir)
+    best_classifier = PretrainedClassifier.load(output_dir)
 
     # Test evaluation
     print("Running inference on test set …")
