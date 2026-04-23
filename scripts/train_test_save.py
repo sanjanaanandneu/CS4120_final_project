@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.data.preprocess import load_dataset_splits
 from src.evaluation.metrics import evaluate_model, print_report
+from src.evaluation.plotting import plot_confusion_matrix, plot_training_curves
 from src.models.logistic_regression import LogisticRegression
 from src.models.svm import LinearSVC
 from src.models.lstm import LSTMClassifier
@@ -57,8 +58,7 @@ def main():
         help="Name for this model to save as; results saved to results/{name}/",
     )
     parser.add_argument("--learning_rate", type=float, default=0.01, help="Learning rate")
-    parser.add_argument("--max_iter", type=int, default=1000, help="Max iterations (lr/svm only)")
-    parser.add_argument("--epochs", type=int, default=10, help="Training epochs (neural models only)")
+    parser.add_argument("--epochs", type=int, default=10, help="Training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size (neural models only)")
     args = parser.parse_args()
 
@@ -88,9 +88,9 @@ def main():
 
     # Instantiate model
     if args.model == "lr":
-        model = LogisticRegression(learning_rate=args.learning_rate, max_iter=args.max_iter)
+        model = LogisticRegression(learning_rate=args.learning_rate, epochs=args.epochs)
     elif args.model == "svm":
-        model = LinearSVC(learning_rate=args.learning_rate, max_iter=args.max_iter)
+        model = LinearSVC(learning_rate=args.learning_rate, epochs=args.epochs)
     elif args.model == "lstm":
         model = LSTMClassifier(input_size=X_train.shape[2], hidden_size=128, num_layers=2)
     elif args.model == "cnn":
@@ -134,6 +134,20 @@ def main():
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=4)
     log.info("Metrics saved → %s", metrics_path)
+
+    # Confusion matrix
+    y_pred = model.predict(X_test)
+    plot_confusion_matrix(y_test, y_pred, save_path=out_dir / "confusion_matrix.png")
+    log.info("Confusion matrix saved → %s", out_dir / "confusion_matrix.png")
+
+    # Training curves (all models now store history)
+    if hasattr(model, "train_losses"):
+        plot_training_curves(
+            model.train_losses,
+            train_accs=model.train_accuracies,
+            save_path=out_dir / "training_curves.png",
+        )
+        log.info("Training curves saved → %s", out_dir / "training_curves.png")
 
 
 if __name__ == "__main__":

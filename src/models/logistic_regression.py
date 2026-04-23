@@ -10,62 +10,52 @@ class LogisticRegression(BaseModel):
     Custom implementation of Logistic Regression for binary classification.
     """
     
-    def __init__(self, learning_rate=0.01, max_iter=1000):
-        """
-        Initialize the Logistic Regression model.
-        
-        Args:
-            learning_rate (float): The step size for gradient descent updates.
-            max_iter (int): Maximum number of iterations for gradient descent.
-        """
+    def __init__(self, learning_rate=0.01, epochs=1000):
         self.learning_rate = learning_rate
-        self.max_iter = max_iter
-        self.weights = None  # Will be initialized in fit
-        self.bias = None     # Will be initialized in fit
+        self.epochs = epochs
+        self.weights = None
+        self.bias = None
     
     def _sigmoid(self, z):
         return 1 / (1 + np.exp(-z))
     
     def fit(self, X, y):
-        """
-        Train the logistic regression model using gradient descent.
-        
-        Args:
-            X (array-like or sparse matrix): Training features.
-            y (array-like): Training labels (0 or 1).
-        """
         sparse_X = sparse.issparse(X)
-
         if not sparse_X:
             X = np.array(X)
-        
         y = np.array(y)
-        
         n_samples, n_features = X.shape
-        
-        # Initialize weights and bias
+
         self.weights = np.zeros(n_features)
         self.bias = 0.0
-        
-        for _ in tqdm(range(self.max_iter)):
+        self.train_losses = []
+        self.train_accuracies = []
+
+        step = max(1, self.epochs // 200)
+
+        for epoch in tqdm(range(self.epochs)):
             if sparse_X:
                 linear_model = np.array(X.dot(self.weights)).ravel() + self.bias
             else:
                 linear_model = np.dot(X, self.weights) + self.bias
-            
-            # Apply sigmoid
+
             y_predicted = self._sigmoid(linear_model)
-            
-            # Compute gradients
+
             if sparse_X:
                 dw = (1 / n_samples) * np.array(X.T.dot(y_predicted - y)).ravel()
             else:
                 dw = (1 / n_samples) * np.dot(X.T, (y_predicted - y))
             db = (1 / n_samples) * np.sum(y_predicted - y)
-            
-            # Update
+
             self.weights -= self.learning_rate * dw
             self.bias -= self.learning_rate * db
+
+            if epoch % step == 0:
+                y_pred_clipped = np.clip(y_predicted, 1e-15, 1 - 1e-15)
+                loss = -np.mean(y * np.log(y_pred_clipped) + (1 - y) * np.log(1 - y_pred_clipped))
+                acc = np.mean((y_predicted >= 0.5).astype(int) == y)
+                self.train_losses.append(loss)
+                self.train_accuracies.append(acc)
     
     def predict(self, X):
         """
