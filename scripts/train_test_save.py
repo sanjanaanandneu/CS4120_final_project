@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -52,6 +51,10 @@ def main():
         "--features", required=True,
         choices=["tfidf", "word_ngram", "char_ngram", "bert_embeddings", "word2vec_embeddings"],
         help="Feature type to use",
+    )
+    parser.add_argument(
+        "--name", required=True,
+        help="Name for this model to save as; results saved to results/{name}/",
     )
     parser.add_argument("--learning_rate", type=float, default=0.01, help="Learning rate")
     parser.add_argument("--max_iter", type=int, default=1000, help="Max iterations (lr/svm only)")
@@ -113,9 +116,12 @@ def main():
             lr=args.learning_rate,
         )
 
+    # Prepare output directory
+    out_dir = Path("results") / args.name
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     # Save model
-    os.makedirs("saved_models", exist_ok=True)
-    model_path = f"saved_models/{args.model}_{args.dataset}_{args.features}.pkl"
+    model_path = out_dir / "best_model.pkl"
     model.save(model_path)
     log.info("Model saved → %s", model_path)
 
@@ -124,8 +130,7 @@ def main():
     print_report(metrics, title=f"{args.model.upper()} | {args.dataset} | {args.features}")
 
     # Save metrics
-    os.makedirs("metrics", exist_ok=True)
-    metrics_path = f"metrics/{args.model}_{args.dataset}_{args.features}_metrics.json"
+    metrics_path = out_dir / "metrics.json"
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=4)
     log.info("Metrics saved → %s", metrics_path)
