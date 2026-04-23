@@ -55,8 +55,6 @@ class PretrainedClassifier(nn.Module, BaseModel):
     classification head on the pooled output) and exposes convenience methods
     for saving/loading checkpoints and computing class probabilities.
 
-    Parameters
-    ----------
     model_name:
         HuggingFace model identifier, e.g. ``"distilroberta-base"``.
     num_labels:
@@ -87,10 +85,6 @@ class PretrainedClassifier(nn.Module, BaseModel):
         self.model.to(self.device)
         print(f"  Device: {self.device}")
 
-    # ------------------------------------------------------------------
-    # Forward pass
-    # ------------------------------------------------------------------
-
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -99,8 +93,6 @@ class PretrainedClassifier(nn.Module, BaseModel):
     ):
         """Run a forward pass through the underlying HF model.
 
-        Parameters
-        ----------
         input_ids, attention_mask:
             Token tensors from the tokenizer, shape ``(batch, seq_len)``.
         labels:
@@ -108,7 +100,6 @@ class PretrainedClassifier(nn.Module, BaseModel):
             returns a ``SequenceClassifierOutput`` with a ``loss`` field.
 
         Returns
-        -------
         ``transformers.modeling_outputs.SequenceClassifierOutput``
         """
         return self.model(
@@ -116,10 +107,6 @@ class PretrainedClassifier(nn.Module, BaseModel):
             attention_mask=attention_mask,
             labels=labels,
         )
-
-    # ------------------------------------------------------------------
-    # Inference helpers
-    # ------------------------------------------------------------------
 
     @torch.no_grad()
     def predict_proba(
@@ -129,13 +116,10 @@ class PretrainedClassifier(nn.Module, BaseModel):
     ) -> np.ndarray:
         """Return softmax class probabilities as a NumPy array.
 
-        Parameters
-        ----------
         input_ids, attention_mask:
             Token tensors, shape ``(batch, seq_len)``.
 
         Returns
-        -------
         np.ndarray of shape ``(batch, num_labels)``
         """
         self.model.eval()

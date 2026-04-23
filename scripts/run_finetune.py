@@ -26,7 +26,7 @@ from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.data.hc3_loader import load_hc3
+from src.data.preprocess import load_dataset_splits
 from src.data.hc3_dataset import HC3Dataset
 from src.models.pretrained_classifier import PretrainedClassifier
 from src.training.trainer import Trainer, TrainerConfig
@@ -37,11 +37,12 @@ def _build_loaders(
     model_name: str,
     batch_size: int,
     max_length: int,
+    dataset: str = "hc3",
     val_ratio: float = 0.1,
     max_samples: int | None = None,
 ) -> tuple[DataLoader, DataLoader, DataLoader, list[str]]:
-    """Load HC3, carve a validation split, return three DataLoaders + test sources."""
-    train_df, test_df = load_hc3()
+    """Load dataset, carve a validation split, return three DataLoaders + test sources."""
+    train_df, test_df = load_dataset_splits(dataset)
 
     # Optional subsample for quick experiments (stratified)
     if max_samples is not None and max_samples < len(train_df):
@@ -128,15 +129,18 @@ def main() -> None:
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--output_dir", default=None, help="Checkpoint directory (auto-named if omitted)")
     parser.add_argument("--patience", type=int, default=2)
+    parser.add_argument("--dataset", default="hc3", choices=["hc3", "turingbench", "combined"],
+                        help="Dataset to train on (default: hc3)")
     args = parser.parse_args()
 
-    output_dir = args.output_dir or f"models/{args.model.replace('/', '_')}"
+    output_dir = args.output_dir or f"models/{args.model.replace('/', '_')}_{args.dataset}"
 
     # Data
     train_loader, val_loader, test_loader, test_sources = _build_loaders(
         model_name=args.model,
         batch_size=args.batch_size,
         max_length=args.max_length,
+        dataset=args.dataset,
         val_ratio=args.val_ratio,
         max_samples=args.max_samples,
     )

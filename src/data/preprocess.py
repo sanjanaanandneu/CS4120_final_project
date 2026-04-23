@@ -39,12 +39,16 @@ def load_dataset_splits(dataset_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     Parameters
     ----------
     dataset_name:
-        One of ``"hc3"`` or ``"turingbench"`` (matches the CSV filename prefix).
+        One of ``"hc3"``, ``"turingbench"``, or ``"combined"``.
+        ``"combined"`` merges HC3 and TuringBench on the fly.
 
     Returns
     -------
     train_df, test_df
     """
+    if dataset_name == "combined":
+        return _load_combined()
+
     train_path = PROCESSED_DIR / f"{dataset_name}_train.csv"
     test_path = PROCESSED_DIR / f"{dataset_name}_test.csv"
 
@@ -61,5 +65,28 @@ def load_dataset_splits(dataset_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     _validate_and_summarize(train_df, f"{dataset_name} train")
     print(f"  Test ({len(test_df)} rows):")
     _validate_and_summarize(test_df, f"{dataset_name} test")
+
+    return train_df, test_df
+
+
+def _load_combined() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Merge HC3 and TuringBench splits into a single combined dataset."""
+    print("\nLoading combined (HC3 + TuringBench) …")
+    hc3_train = pd.read_csv(PROCESSED_DIR / "hc3_train.csv")
+    hc3_test = pd.read_csv(PROCESSED_DIR / "hc3_test.csv")
+    tb_train = pd.read_csv(PROCESSED_DIR / "turingbench_train.csv")
+    tb_test = pd.read_csv(PROCESSED_DIR / "turingbench_test.csv")
+
+    train_df = pd.concat([hc3_train, tb_train], ignore_index=True).sample(
+        frac=1, random_state=42
+    ).reset_index(drop=True)
+    test_df = pd.concat([hc3_test, tb_test], ignore_index=True).sample(
+        frac=1, random_state=42
+    ).reset_index(drop=True)
+
+    print(f"  Train ({len(train_df)} rows):")
+    _validate_and_summarize(train_df, "combined train")
+    print(f"  Test ({len(test_df)} rows):")
+    _validate_and_summarize(test_df, "combined test")
 
     return train_df, test_df
