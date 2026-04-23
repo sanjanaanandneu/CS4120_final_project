@@ -22,7 +22,7 @@ Saves `data/processed/hc3_train.csv` and `data/processed/hc3_test.csv`.
 
 **TuringBench:**
 
-Download the zip file from [TuringBench]() and unzip into a data folder
+Download the zip file from [TuringBench](https://huggingface.co/datasets/turingbench/TuringBench/resolve/main/TuringBench.zip?download=true) and unzip into a data folder
 
 ```bash
 python src/data/turingbench_loader.py
