@@ -57,16 +57,27 @@ class RNN(nn.Module, BaseModel):
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         loss_fn = nn.BCELoss()
 
+        self.train_losses = []
+        self.train_accuracies = []
         self.train()
         for epoch in range(epochs):
             epoch_loss = 0.0
+            correct = 0
+            total = 0
             for X_batch, y_batch in loader:
                 optimizer.zero_grad()
-                loss = loss_fn(self.forward(X_batch), y_batch)
+                probs = self.forward(X_batch)
+                loss = loss_fn(probs, y_batch)
                 loss.backward()
                 optimizer.step()
                 epoch_loss += loss.item()
-            print(f"Epoch {epoch + 1}/{epochs} — Loss: {epoch_loss / len(loader):.4f}")
+                correct += ((probs >= 0.5).int() == y_batch.int()).sum().item()
+                total += y_batch.size(0)
+            avg_loss = epoch_loss / len(loader)
+            avg_acc = correct / total
+            self.train_losses.append(avg_loss)
+            self.train_accuracies.append(avg_acc)
+            print(f"Epoch {epoch + 1}/{epochs} — Loss: {avg_loss:.4f}  Acc: {avg_acc:.4f}")
 
     def predict(self, X: np.ndarray, batch_size: int = 32) -> np.ndarray:
         X_tensor = torch.tensor(X, dtype=torch.float32)
