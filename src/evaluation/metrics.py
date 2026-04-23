@@ -16,10 +16,17 @@ sklearn-based
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
+    ConfusionMatrixDisplay,
+    confusion_matrix,
     f1_score,
     precision_score,
     recall_score,
@@ -144,6 +151,43 @@ def print_report(
             print(f"    {n_label:<20} {dm['f1_weighted']:.4f}")
 
     print(f"{'='*width}")
+
+
+def plot_confusion_matrix(
+    y_true: list[int] | np.ndarray,
+    y_pred: list[int] | np.ndarray,
+    save_path: str | Path,
+    title: str = "Confusion Matrix",
+    labels: list[str] | None = None,
+) -> None:
+    """Save a confusion matrix heatmap to *save_path*.
+
+    Parameters
+    ----------
+    y_true, y_pred:
+        Ground-truth and predicted labels (0 = human, 1 = AI).
+    save_path:
+        File path for the saved figure (PNG recommended).
+    title:
+        Figure title.
+    labels:
+        Class names. Defaults to ``["Human", "AI"]``.
+    """
+    if labels is None:
+        labels = ["0", "1"]
+
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    fig, ax = plt.subplots(figsize=(5, 4))
+    disp.plot(ax=ax, colorbar=True, cmap="Blues", values_format="d")
+    ax.set_title(title)
+
+    fig.tight_layout()
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+    print(f"  Confusion matrix saved → {save_path}")
 
 
 def evaluate_model(
